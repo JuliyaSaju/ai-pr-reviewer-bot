@@ -1,5 +1,6 @@
 import os
 import requests
+import time
 import google.generativeai as genai
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -33,8 +34,11 @@ If there is nothing wrong, just say "No major issues found."
 Diff:
 {patch}
 """
-    response = model.generate_content(prompt)
-    return response.text
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"(AI review skipped due to an error: {e})"
 
 @app.post("/webhook")
 async def github_webhook(request: Request):
@@ -61,5 +65,6 @@ async def github_webhook(request: Request):
                 print(f"\n--- Reviewing {filename} ---")
                 review = get_ai_review(filename, patch)
                 print(f"AI Review:\n{review}")
-
+                time.sleep(15)
+                
     return {"status": "received"}
