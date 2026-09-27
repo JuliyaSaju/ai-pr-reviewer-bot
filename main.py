@@ -40,6 +40,17 @@ Diff:
     except Exception as e:
         return f"(AI review skipped due to an error: {e})"
 
+def post_pr_comment(repo_full_name, pr_number, comment_body):
+    url = f"https://api.github.com/repos/{repo_full_name}/issues/{pr_number}/comments"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+    data = {"body": comment_body}
+    response = requests.post(url, headers=headers, json=data)
+    print(f"Comment post status: {response.status_code}")
+    return response.status_code
+
 @app.post("/webhook")
 async def github_webhook(request: Request):
     payload = await request.json()
@@ -58,6 +69,7 @@ async def github_webhook(request: Request):
         response = requests.get(files_url, headers=headers)
         changed_files = response.json()
 
+        all_reviews = []
         for file in changed_files:
             filename = file["filename"]
             patch = file.get("patch", "")
@@ -65,6 +77,11 @@ async def github_webhook(request: Request):
                 print(f"\n--- Reviewing {filename} ---")
                 review = get_ai_review(filename, patch)
                 print(f"AI Review:\n{review}")
+                all_reviews.append(f"### 📄 `{filename}`\n{review}")
                 time.sleep(15)
+
+        if all_reviews:
+            comment_body = "## 🤖 AI Code Review\n\n" + "\n\n---\n\n".join(all_reviews)
+            post_pr_comment(repo_full_name, pr_number, comment_body)
                 
     return {"status": "received"}
