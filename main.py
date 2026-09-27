@@ -1,5 +1,6 @@
 import os
 import requests
+import google.generativeai as genai
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 
@@ -8,6 +9,10 @@ load_dotenv()
 app = FastAPI()
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-2.0-flash")
 
 @app.get("/")
 def read_root():
@@ -15,12 +20,21 @@ def read_root():
 
 @app.get("/check-keys")
 def check_keys():
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    github_token = os.getenv("GITHUB_TOKEN")
     return {
-        "gemini_key_loaded": gemini_key is not None,
-        "github_token_loaded": github_token is not None
+        "gemini_key_loaded": GEMINI_API_KEY is not None,
+        "github_token_loaded": GITHUB_TOKEN is not None
     }
+
+def get_ai_review(filename, patch):
+    prompt = f"""You are a code reviewer. Review this code diff from a file called {filename}.
+Point out any bugs, security issues, or bad practices. Be concise, use bullet points.
+If there is nothing wrong, just say "No major issues found."
+
+Diff:
+{patch}
+"""
+    response = model.generate_content(prompt)
+    return response.text
 
 @app.post("/webhook")
 async def github_webhook(request: Request):
@@ -29,7 +43,7 @@ async def github_webhook(request: Request):
     print(f"Webhook received! Action: {action}")
 
     if action == "opened":
-        repo_full_name = payload["repository"]["full_name"]  # e.g. "JuliyaSaju/ai-pr-reviewer-bot"
+        repo_full_name = payload["repository"]["full_name"]
         pr_number = payload["pull_request"]["number"]
 
         files_url = f"https://api.github.com/repos/{repo_full_name}/pulls/{pr_number}/files"
@@ -41,7 +55,11 @@ async def github_webhook(request: Request):
         changed_files = response.json()
 
         for file in changed_files:
-            print(f"File changed: {file['filename']}")
-            print(f"Diff:\n{file.get('patch', 'No patch available')}")
+            filename = file["filename"]
+            patch = file.get("patch", "")
+            if patch:
+                print(f"\n--- Reviewing {filename} ---")
+                review = get_ai_review(filename, patch)
+                print(f"AI Review:\n{review}")
 
     return {"status": "received"}
