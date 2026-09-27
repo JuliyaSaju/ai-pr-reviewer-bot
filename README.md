@@ -51,3 +51,5 @@ The testing process also surfaced a limitation: the model incorrectly flagged a 
 3. Create a `.env` file containing `GEMINI_API_KEY` and `GITHUB_TOKEN`
 4. Start the server: `uvicorn main:app --reload`
 5. Expose the local server using ngrok and configure the resulting URL under the repository's Settings → Webhooks
+
+## Deployed on Render
